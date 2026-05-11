@@ -102,7 +102,7 @@ def _event_to_response(event: EventRecord) -> EventResponse:
     )
 
 
-def create_app(config_path: str = "config\\config.json") -> FastAPI:
+def create_app(config_path: str | Path = Path("config", "config.json")) -> FastAPI:
     settings = load_settings(config_path)
     container = AppContainer(settings)
     app = FastAPI(title="CamAiSearch API", version="1.0.0")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import uvicorn
 
@@ -9,7 +10,11 @@ from api.server import create_app
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CamAiSearch - Video Intelligence API")
-    parser.add_argument("--config", default="config\\config.json", help="Ruta al archivo de configuración JSON")
+    parser.add_argument(
+        "--config",
+        default=str(Path("config", "config.json")),
+        help="Ruta al archivo de configuración JSON",
+    )
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true")

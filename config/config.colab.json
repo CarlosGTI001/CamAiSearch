@@ -1,0 +1,34 @@
+{
+  "database_url": "sqlite:///output/camai.db",
+  "output_dir": "output",
+  "videos_dir": "videos",
+  "models": {
+    "yolo_model": "yolo11n.pt",
+    "clip_model": "openai/clip-vit-base-patch32",
+    "blip_model": "Salesforce/blip-image-captioning-base",
+    "whisper_model": "base",
+    "face_model": "buffalo_l",
+    "device": "cpu",
+    "fp16": false
+  },
+  "thresholds": {
+    "detector_confidence": 0.3,
+    "face_similarity": 0.45,
+    "semantic_similarity": 0.25,
+    "tracking_max_distance": 120.0,
+    "running_speed_px_per_sec": 260.0
+  },
+  "runtime": {
+    "analyze_fps": 6,
+    "batch_size": 2,
+    "reconnect_seconds": 3.0,
+    "buffer_seconds": 12,
+    "max_parallel_cameras": 2
+  },
+  "alerts": {
+    "telegram_enabled": false,
+    "discord_enabled": false,
+    "email_enabled": false
+  },
+  "cameras": []
+}

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+LOGGER = logging.getLogger(__name__)
+DEFAULT_CONFIG_PATH = Path("config", "config.json")
 
 
 @dataclass(slots=True)
@@ -99,19 +103,47 @@ def _build_camera(raw: dict[str, Any]) -> CameraSettings:
     )
 
 
-def load_settings(config_path: str | Path = "config\\config.json") -> AppSettings:
+def _resolve_compute_device(device: str) -> str:
+    requested = device.strip().lower()
+    if requested != "cuda":
+        return requested
+
+    try:
+        import torch
+    except ImportError:
+        LOGGER.warning("Se solicitó CUDA, pero torch no está disponible. Se usará CPU.")
+        return "cpu"
+
+    if not torch.cuda.is_available():
+        LOGGER.warning("Se solicitó CUDA, pero no hay GPU disponible. Se usará CPU.")
+        return "cpu"
+    return "cuda"
+
+
+def load_settings(config_path: str | Path = DEFAULT_CONFIG_PATH) -> AppSettings:
     path = Path(config_path)
+    if not path.exists() and not path.is_absolute():
+        project_relative = Path(__file__).resolve().parent.parent / path
+        if project_relative.exists():
+            path = project_relative
     if not path.exists():
         raise FileNotFoundError(f"No se encontró el archivo de configuración: {path}")
 
     with path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
 
+    raw_models = dict(raw["models"])
+    resolved_device = _resolve_compute_device(str(raw_models.get("device", "cpu")))
+    if bool(raw_models.get("fp16", False)) and resolved_device != "cuda":
+        LOGGER.warning("fp16 se desactiva automáticamente porque CUDA no está disponible.")
+    raw_models["device"] = resolved_device
+    raw_models["fp16"] = bool(raw_models.get("fp16", False)) and resolved_device == "cuda"
+
     settings = AppSettings(
         database_url=raw["database_url"],
         output_dir=raw["output_dir"],
         videos_dir=raw["videos_dir"],
-        models=ModelSettings(**raw["models"]),
+        models=ModelSettings(**raw_models),
         thresholds=ThresholdSettings(**raw["thresholds"]),
         runtime=RuntimeSettings(**raw["runtime"]),
         alerts=AlertSettings(**raw["alerts"]),

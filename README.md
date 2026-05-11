@@ -41,6 +41,25 @@ Instalación:
 pip install -r requirements.txt
 ```
 
+### Google Colab
+
+Para ejecutar en Colab sin depender de CUDA local:
+
+```bash
+!git clone https://github.com/CarlosGTI001/CamAiSearch.git
+%cd CamAiSearch
+!pip install -r requirements-colab.txt
+!python main.py --config config/config.colab.json --host 0.0.0.0 --port 8000
+```
+
+También tienes un notebook listo para usar: `CamAiSearch_Colab.ipynb`.
+
+Luego puedes invocar la API desde otra celda, por ejemplo:
+
+```bash
+!curl http://127.0.0.1:8000/events
+```
+
 ## Configuración
 
 Edita `config/config.json`:
