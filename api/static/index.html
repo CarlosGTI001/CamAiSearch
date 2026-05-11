@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CamAiSearch Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0e1116; color: #e9eef5; margin: 0; }
+    header { padding: 12px 18px; background: #151a22; border-bottom: 1px solid #273041; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; padding: 12px; }
+    .card { background: #151a22; border: 1px solid #273041; border-radius: 8px; padding: 8px; }
+    .card h3 { margin: 0 0 8px 0; font-size: 14px; color: #6fe3ff; }
+    img { width: 100%; border-radius: 6px; background: #05070b; }
+    #alerts { max-height: 300px; overflow: auto; }
+    .alert { border-left: 4px solid #ff7d7d; background: #1f1820; margin-bottom: 6px; padding: 8px; }
+    .sev-info { border-left-color: #6fe3ff; }
+    .sev-medium { border-left-color: #f7cc67; }
+    .sev-high { border-left-color: #ff8d5f; }
+    .sev-critical { border-left-color: #ff4f4f; }
+  </style>
+</head>
+<body>
+  <header><strong>CamAiSearch</strong> · Dashboard en vivo</header>
+  <div class="grid">
+    <div class="card">
+      <h3>Cámaras</h3>
+      <div id="camera-grid" class="grid"></div>
+    </div>
+    <div class="card">
+      <h3>Alertas y eventos en vivo</h3>
+      <div id="alerts"></div>
+    </div>
+  </div>
+
+  <script>
+    async function loadCameras() {
+      const res = await fetch('/cameras');
+      const cameras = await res.json();
+      const grid = document.getElementById('camera-grid');
+      grid.innerHTML = '';
+      cameras.forEach(cam => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'card';
+        wrapper.innerHTML = `<h3>${cam.name} (${cam.camera_id})</h3><img src="/stream/${cam.camera_id}" alt="${cam.camera_id}" />`;
+        grid.appendChild(wrapper);
+      });
+    }
+
+    function connectEvents() {
+      const ws = new WebSocket(`ws://${location.host}/ws/live-events`);
+      ws.onmessage = (message) => {
+        const event = JSON.parse(message.data);
+        const alerts = document.getElementById('alerts');
+        const div = document.createElement('div');
+        div.className = `alert sev-${event.severity}`;
+        div.innerHTML = `<strong>${event.event_type}</strong> · ${event.camera_id}<br/>${event.description}`;
+        alerts.prepend(div);
+      };
+      ws.onclose = () => setTimeout(connectEvents, 1500);
+    }
+
+    loadCameras();
+    connectEvents();
+  </script>
+</body>
+</html>

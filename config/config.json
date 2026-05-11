@@ -1,0 +1,55 @@
+{
+  "database_url": "sqlite:///output/camai.db",
+  "output_dir": "output",
+  "videos_dir": "videos",
+  "models": {
+    "yolo_model": "yolo11n.pt",
+    "clip_model": "openai/clip-vit-base-patch32",
+    "blip_model": "Salesforce/blip-image-captioning-base",
+    "whisper_model": "base",
+    "face_model": "buffalo_l",
+    "device": "cuda",
+    "fp16": true
+  },
+  "thresholds": {
+    "detector_confidence": 0.3,
+    "face_similarity": 0.45,
+    "semantic_similarity": 0.25,
+    "tracking_max_distance": 120.0,
+    "running_speed_px_per_sec": 260.0
+  },
+  "runtime": {
+    "analyze_fps": 6,
+    "batch_size": 4,
+    "reconnect_seconds": 3.0,
+    "buffer_seconds": 12,
+    "max_parallel_cameras": 8
+  },
+  "alerts": {
+    "telegram_enabled": false,
+    "discord_enabled": false,
+    "email_enabled": false
+  },
+  "cameras": [
+    {
+      "camera_id": "cam_usb_0",
+      "name": "USB Camera 0",
+      "source": "0",
+      "enabled": true,
+      "zones": [
+        {
+          "name": "entrada",
+          "type": "intrusion",
+          "polygon": [[10, 10], [630, 10], [630, 430], [10, 430]]
+        }
+      ],
+      "lines": [
+        {
+          "name": "linea_puerta",
+          "p1": [320, 10],
+          "p2": [320, 470]
+        }
+      ]
+    }
+  ]
+}
