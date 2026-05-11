@@ -54,6 +54,8 @@ Para ejecutar en Colab sin depender de CUDA local:
 
 También tienes un notebook listo para usar: `CamAiSearch_Colab.ipynb`.
 
+El notebook ya incluye una celda para exponer la UI completa con túnel de Cloudflare (TryCloudflare) y acceder al dashboard desde una URL pública.
+
 Luego puedes invocar la API desde otra celda, por ejemplo:
 
 ```bash
