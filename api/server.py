@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+import threading
+import time
+import uuid
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket
 from starlette.websockets import WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -83,6 +86,8 @@ class AppContainer:
             repository=self.repository,
         )
         self.camera_map: dict[str, CameraSettings] = {camera.camera_id: camera for camera in settings.cameras}
+        self.analysis_jobs: dict[str, dict] = {}
+        self.analysis_jobs_lock = threading.Lock()
 
 
 def _event_to_response(event: EventRecord) -> EventResponse:
@@ -140,6 +145,145 @@ def create_app(config_path: str | Path = Path("config", "config.json")) -> FastA
             camera_settings,
         )
         return AnalyzeResponse(**result)
+
+    @app.post("/upload-video")
+    async def upload_video(file: UploadFile = File(...)) -> JSONResponse:
+        filename = Path(file.filename or "").name
+        if not filename:
+            raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+        videos_dir = Path(container.settings.videos_dir)
+        videos_dir.mkdir(parents=True, exist_ok=True)
+        output_name = f"{int(time.time() * 1000)}_{filename}"
+        output_path = videos_dir / output_name
+
+        size_bytes = 0
+        with output_path.open("wb") as out_file:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size_bytes += len(chunk)
+                out_file.write(chunk)
+        await file.close()
+        return JSONResponse(
+            {
+                "filename": output_name,
+                "path": str(output_path),
+                "size_bytes": size_bytes,
+            }
+        )
+
+    def _run_analysis_job(
+        job_id: str,
+        source: str,
+        camera_id: str,
+        max_seconds: int | None,
+        save_clips: bool,
+        camera_settings: CameraSettings | None,
+    ) -> None:
+        def update_progress(
+            processed_frames: int,
+            estimated_total_frames: int | None,
+            events_detected: int,
+            clips_generated: int,
+        ) -> None:
+            progress_percent = None
+            if estimated_total_frames and estimated_total_frames > 0:
+                progress_percent = round(min(100.0, (processed_frames / estimated_total_frames) * 100.0), 2)
+            with container.analysis_jobs_lock:
+                job = container.analysis_jobs.get(job_id)
+                if job is None:
+                    return
+                job.update(
+                    {
+                        "processed_frames": processed_frames,
+                        "estimated_total_frames": estimated_total_frames,
+                        "events_detected": events_detected,
+                        "clips_generated": clips_generated,
+                        "progress_percent": progress_percent,
+                        "updated_at": time.time(),
+                    }
+                )
+
+        with container.analysis_jobs_lock:
+            job = container.analysis_jobs[job_id]
+            job["status"] = "running"
+            job["started_at"] = time.time()
+            job["updated_at"] = time.time()
+
+        try:
+            result = container.pipeline.analyze_video(
+                source=source,
+                camera_id=camera_id,
+                max_seconds=max_seconds,
+                save_clips=save_clips,
+                camera_settings=camera_settings,
+                progress_callback=update_progress,
+            )
+            with container.analysis_jobs_lock:
+                job = container.analysis_jobs[job_id]
+                job["status"] = "completed"
+                job["result"] = result
+                job["error"] = None
+                job["finished_at"] = time.time()
+                job["updated_at"] = time.time()
+        except (RuntimeError, ValueError, FileNotFoundError, OSError) as exc:
+            with container.analysis_jobs_lock:
+                job = container.analysis_jobs[job_id]
+                job["status"] = "failed"
+                job["error"] = str(exc)
+                job["finished_at"] = time.time()
+                job["updated_at"] = time.time()
+
+    @app.post("/analyze-async")
+    async def analyze_async(payload: AnalyzeRequest) -> JSONResponse:
+        camera_id = payload.camera_id or f"source_{Path(payload.source).stem or 'stream'}"
+        camera_settings = container.camera_map.get(camera_id)
+        job_id = uuid.uuid4().hex
+        created_at = time.time()
+        with container.analysis_jobs_lock:
+            container.analysis_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "queued",
+                "source": payload.source,
+                "camera_id": camera_id,
+                "max_seconds": payload.max_seconds,
+                "save_clips": payload.save_clips,
+                "processed_frames": 0,
+                "estimated_total_frames": None,
+                "events_detected": 0,
+                "clips_generated": 0,
+                "progress_percent": 0.0,
+                "result": None,
+                "error": None,
+                "created_at": created_at,
+                "started_at": None,
+                "finished_at": None,
+                "updated_at": created_at,
+            }
+        thread = threading.Thread(
+            target=_run_analysis_job,
+            args=(
+                job_id,
+                payload.source,
+                camera_id,
+                payload.max_seconds,
+                payload.save_clips,
+                camera_settings,
+            ),
+            daemon=True,
+            name=f"analyze-job-{job_id[:8]}",
+        )
+        thread.start()
+        return JSONResponse({"job_id": job_id, "status": "queued", "camera_id": camera_id})
+
+    @app.get("/analyze-jobs/{job_id}")
+    async def analyze_job_status(job_id: str) -> JSONResponse:
+        with container.analysis_jobs_lock:
+            job = container.analysis_jobs.get(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail=f"No existe el job: {job_id}")
+            return JSONResponse(job)
 
     @app.get("/search", response_model=SearchResponse)
     async def search(

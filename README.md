@@ -85,6 +85,9 @@ Dashboard:
 ## Endpoints principales
 
 - `POST /analyze` analizar archivo de video o stream puntual
+- `POST /upload-video` subir video al servidor para análisis desde UI/API
+- `POST /analyze-async` lanzar análisis en background (con progreso)
+- `GET /analyze-jobs/{job_id}` consultar estado/progreso de análisis
 - `GET /search?q=persona corriendo` búsqueda inteligente
 - `GET /events` timeline de eventos
 - `GET /faces` listar personas registradas
@@ -97,6 +100,8 @@ Dashboard:
 - `GET /recordings` grabaciones de eventos
 - `GET /heatmap/{camera_id}` heatmap de movimiento
 - `WS /ws/live-events` stream de eventos para UI
+
+El dashboard (`/`) permite visualizar cámaras en vivo y también subir un video para procesarlo mostrando progreso y eventos mientras corre el análisis.
 
 ## Ejemplos de consultas semánticas
 

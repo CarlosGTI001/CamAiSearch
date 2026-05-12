@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 import uuid
 
 import cv2
@@ -125,6 +126,7 @@ class VideoAnalysisPipeline:
         max_seconds: int | None = None,
         save_clips: bool = True,
         camera_settings: CameraSettings | None = None,
+        progress_callback: Callable[[int, int | None, int, int], None] | None = None,
     ) -> dict:
         source_value = int(source) if source.isdigit() else source
         cap = cv2.VideoCapture(source_value)
@@ -137,6 +139,12 @@ class VideoAnalysisPipeline:
         analysis_fps = max(1, self.settings.runtime.analyze_fps)
         sample_interval = max(1, int(round(fps / analysis_fps)))
         max_frames = int(max_seconds * fps) if max_seconds else None
+        estimated_total_frames: int | None = None
+        raw_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if raw_total_frames > 0:
+            estimated_total_frames = raw_total_frames
+        if max_frames is not None:
+            estimated_total_frames = min(max_frames, estimated_total_frames) if estimated_total_frames else max_frames
         frame_buffer: deque[np.ndarray] = deque(maxlen=max(analysis_fps * self.settings.runtime.buffer_seconds, 1))
 
         total_frames = 0
@@ -183,9 +191,13 @@ class VideoAnalysisPipeline:
                             )
                             self.repository.update_event_clip_path(event.id, clip_path)
                             clips_generated += 1
+                if progress_callback is not None:
+                    progress_callback(total_frames + 1, estimated_total_frames, events_detected, clips_generated)
             total_frames += 1
 
         cap.release()
+        if progress_callback is not None:
+            progress_callback(total_frames, estimated_total_frames, events_detected, clips_generated)
         return {
             "status": "ok",
             "camera_id": camera_id,
